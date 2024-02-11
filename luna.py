@@ -1,11 +1,18 @@
 import pyttsx3
 import speech_recognition as sr
 import wikipedia as wk
+import pyjokes as pj
 import json
+from dotenv import load_dotenv, dotenv_values, set_key
+import os
+import random
+
+envPath = '.env'
+load_dotenv(envPath)
 
 # Funzione per controllare se una stringa contiene una delle frasi di ricerca comuni
-def string_contains_any_searchrequest(string, searchPhrases):
-    for element in searchPhrases:
+def string_contains_any_request(string, phrases):
+    for element in phrases:
         if element in string:
             return True
     return False
@@ -30,10 +37,23 @@ def search_wikipedia(query):
         return "There are too many articles about your request, can you give me more details?"
     except wk.exceptions.PageError as e:
         return "Sorry, I haven't found anything for your request"
+    
+def tell_joke():
+    joke = pj.get_joke()
+    return joke
 
 # Carica le frasi di ricerca comuni da un file JSON
 commonSearchPhrasesFile = open('commonSearchRequest.json', 'r')
 commonSearchPhrases = json.load(commonSearchPhrasesFile)["search_phrases"]
+
+commonUpdateProfilePhrasesFile = open('commonUpdateProfileRequest.json', 'r')
+commonUpdateProfilePhrases = json.load(commonUpdateProfilePhrasesFile)["modify_info_phrases"]
+
+commonJokesRequestFile = open('commonJokesRequest.json', 'r')
+commonJokesRequestPhrases = json.load(commonJokesRequestFile)["joke_request_phrases"]
+
+commonNeedMoreRequestFile = open('commonNeedMoreRequest.json', 'r')
+commonNeedMoreRequestPhrases = json.load(commonNeedMoreRequestFile)["need_more_phrases"]
 
 # Inizializza il motore TTS con la lingua inglese
 engine = pyttsx3.init(driverName='sapi5')
@@ -44,7 +64,7 @@ engine.setProperty('voice', voices[2].id)  # Seleziona una voce in inglese
 micRec = sr.Recognizer()
 
 # Saluta l'utente all'inizio
-engine.say("Hey Giovanni! How can I assist you today?")
+engine.say(f"Hey {os.getenv("USER_FIRST_NAME")}! How can I assist you today?")
 engine.runAndWait()
 
 # Loop di conversazione
@@ -58,14 +78,42 @@ while True:
         userRequest = micRec.recognize_google(audio, language="en-EN").lower()
         
         # Elabora la richiesta solo se contiene una delle frasi di ricerca comuni
-        if string_contains_any_searchrequest(userRequest, commonSearchPhrases):
+        if string_contains_any_request(userRequest, commonSearchPhrases):
             # Esegui la ricerca su Wikipedia
             wikiResearch = exclude_strings(userRequest, commonSearchPhrases, "on wikipedia")
             engine.say("I'm searching " + wikiResearch + " on Wikipedia for you.")
             searchResult = search_wikipedia(wikiResearch)
             engine.say(searchResult)  # Lettura del riassunto dal risultato di Wikipedia
-        elif userRequest == 'no' or userRequest == 'nothing':
-            engine.say("Okay, have a great day!")
+        elif string_contains_any_request(userRequest, commonUpdateProfilePhrases): #da fixare, dopo aver chiesto quale informazione si vuole aggiornare triggera subito "richiesta non capita"
+            engine.say("What information would you like to update? First name, last name, age, nickname or residence?")
+            with sr.Microphone() as source:
+                audio = micRec.listen(source)
+            try:
+                userRequest = micRec.recognize_google(audio, language="en-EN").lower()
+
+                if userRequest == 'first name':
+                    engine.say("Ok, what is your first name?")
+                    with sr.Microphone() as source:
+                        audio = micRec.listen(source)
+                    try:
+                        userRequest = micRec.recognize_google(audio, language="en-EN").lower()
+                        set_key(envPath, 'USER_FIRST_NAME', userRequest)
+                    except sr.UnknownValueError:
+                        engine.say("Sorry, I didn't understand your request")
+                    except sr.RequestError as e:
+                        engine.say("Could not request results from Google Speech Recognition service; {0}".format(e))
+
+                    engine.say("Ok, from now on I will remember your first name is " + os.getenv("USER_FIRST_NAME"))
+
+            except sr.UnknownValueError:
+                engine.say("Sorry, I didn't understand your request")
+            except sr.RequestError as e:
+                engine.say("Could not request results from Google Speech Recognition service; {0}".format(e))
+        elif string_contains_any_request(userRequest, commonJokesRequestPhrases):
+            engine.say("Ok, here's a joke")
+            engine.say(tell_joke())
+        elif userRequest == 'nothing':
+            engine.say("Okay, have a great day! I'm here if you need help!")
             engine.runAndWait()
             break
         else:
@@ -80,5 +128,5 @@ while True:
         engine.say("Could not request results from Google Speech Recognition service; {0}".format(e))
 
     # Chiedi all'utente se c'è bisogno di altro
-    engine.say("Is there anything else I can assist you with?")
+    engine.say(random.choice(commonNeedMoreRequestPhrases))
     engine.runAndWait()
