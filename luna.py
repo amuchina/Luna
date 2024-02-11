@@ -1,45 +1,9 @@
 import pyttsx3
-import pyaudio
 import speech_recognition as sr
 import wikipedia as wk
 import json
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize, sent_tokenize
-from heapq import nlargest
 
-nltk.download('punkt')
-nltk.download('stopwords')
-
-def summarize_text(text, num_sentences=3):
-    # Tokenizzazione del testo in frasi
-    sentences = sent_tokenize(text)
-
-    # Tokenizzazione delle parole e rimozione delle stopwords
-    words = word_tokenize(text)
-    words = [word.lower() for word in words if word.isalnum()]
-    stop_words = set(stopwords.words("english"))
-    words = [word for word in words if word not in stop_words]
-
-    # Calcolo della frequenza delle parole
-    word_freq = nltk.FreqDist(words)
-
-    # Assegnazione di un peso alle frasi
-    sentence_scores = {}
-    for sentence in sentences:
-        for word in nltk.word_tokenize(sentence.lower()):
-            if word in word_freq:
-                if len(sentence.split(' ')) < 30:
-                    if sentence not in sentence_scores:
-                        sentence_scores[sentence] = word_freq[word]
-                    else:
-                        sentence_scores[sentence] += word_freq[word]
-
-    # Selezione delle frasi più significative
-    summarized_sentences = nlargest(num_sentences, sentence_scores, key=sentence_scores.get)
-    summary = ' '.join(summarized_sentences)
-    return summary
-
+# Funzione per controllare se una stringa contiene una delle frasi di ricerca comuni
 def string_contains_any_searchrequest(string, searchPhrases):
     for element in searchPhrases:
         if element in string:
@@ -52,47 +16,69 @@ def exclude_strings(string, exclude_list, *additional_exclusions):
         string = string.replace(item, "")
     return string
 
+# Funzione per eseguire una ricerca su Wikipedia
 def search_wikipedia(query):
     try:
         search_results = wk.search(query)
 
         if search_results:
             page = wk.page(search_results[0])
-            
-            return page.content
+            return page.summary
         else:
-            return "I'm sorry, I haven't found any result on wikipedia for your request"
+            return "I'm sorry, I haven't found any result on Wikipedia for your request"
     except wk.exceptions.DisambiguationError as e:
         return "There are too many articles about your request, can you give me more details?"
     except wk.exceptions.PageError as e:
         return "Sorry, I haven't found anything for your request"
 
-commonSearchWikipedias = open('commonSearchRequest.json', 'r')
-commonSearchPhrases = json.load(commonSearchWikipedias)["search_phrases"]
-print(commonSearchPhrases)
+# Carica le frasi di ricerca comuni da un file JSON
+commonSearchPhrasesFile = open('commonSearchRequest.json', 'r')
+commonSearchPhrases = json.load(commonSearchPhrasesFile)["search_phrases"]
 
+# Inizializza il motore TTS con la lingua inglese
 engine = pyttsx3.init(driverName='sapi5')
-
 voices = engine.getProperty('voices')
-engine.setProperty('voice', voices[3].id) 
+engine.setProperty('voice', voices[2].id)  # Seleziona una voce in inglese
 
+# Inizializza il recognizer per l'ascolto con la lingua inglese
 micRec = sr.Recognizer()
 
-with sr.Microphone() as source:
-    engine.say("Hi Giovanni, how are you doing? How can I help you today?")
-    audio = micRec.listen(source)
-try:
-    userRequest = micRec.recognize_google(audio, language="en-EN").lower()
-    if string_contains_any_searchrequest(userRequest, commonSearchPhrases):
-        wikiResearch = exclude_strings(userRequest, commonSearchPhrases, "on wikipedia")
-        print("I'm searching " + wikiResearch + " on wikipedia for you")
-        searchResult = search_wikipedia(wikiResearch)
-        print(wk.summary(searchResult)) #fixare il summarize, magari lavorando con le sezioni del risultato
-        
-        
-except sr.UnknownValueError:
-    engine.say("I haven't understand what you said, can you repeat?")
-except sr.RequestError as e:
-    print("Could not request results from Google Speech Recognition service; {0}".format(e))
-
+# Saluta l'utente all'inizio
+engine.say("Hey Giovanni! How can I assist you today?")
 engine.runAndWait()
+
+# Loop di conversazione
+while True:
+    # Ascolta l'input dell'utente
+    with sr.Microphone() as source:
+        audio = micRec.listen(source)
+    
+    try:
+        # Trascrivi l'input dell'utente
+        userRequest = micRec.recognize_google(audio, language="en-EN").lower()
+        
+        # Elabora la richiesta solo se contiene una delle frasi di ricerca comuni
+        if string_contains_any_searchrequest(userRequest, commonSearchPhrases):
+            # Esegui la ricerca su Wikipedia
+            wikiResearch = exclude_strings(userRequest, commonSearchPhrases, "on wikipedia")
+            engine.say("I'm searching " + wikiResearch + " on Wikipedia for you.")
+            searchResult = search_wikipedia(wikiResearch)
+            engine.say(searchResult)  # Lettura del riassunto dal risultato di Wikipedia
+        elif userRequest == 'no' or userRequest == 'nothing':
+            engine.say("Okay, have a great day!")
+            engine.runAndWait()
+            break
+        else:
+            engine.say("I'm sorry, I didn't understand your request.")
+        
+        engine.runAndWait()  # Attendere che l'assistente finisca di parlare
+
+    except sr.UnknownValueError:
+        engine.say("I didn't catch that, could you please repeat?")
+        engine.runAndWait()
+    except sr.RequestError as e:
+        engine.say("Could not request results from Google Speech Recognition service; {0}".format(e))
+
+    # Chiedi all'utente se c'è bisogno di altro
+    engine.say("Is there anything else I can assist you with?")
+    engine.runAndWait()
