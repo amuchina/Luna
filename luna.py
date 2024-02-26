@@ -43,20 +43,24 @@ def tell_joke():
     return joke
 
 # Carica le frasi di ricerca comuni da un file JSON
-commonSearchPhrasesFile = open('commonSearchRequest.json', 'r')
+mainDir = os.path.dirname(__file__)
+jsonListsDir = 'jsonLists/'
+absJsonFilesPath = os.path.join(mainDir, jsonListsDir)
+
+commonSearchPhrasesFile = open(absJsonFilesPath + 'commonSearchRequest.json', 'r')
 commonSearchPhrases = json.load(commonSearchPhrasesFile)["search_phrases"]
 
-commonUpdateProfilePhrasesFile = open('commonUpdateProfileRequest.json', 'r')
+commonUpdateProfilePhrasesFile = open(absJsonFilesPath + 'commonUpdateProfileRequest.json', 'r')
 commonUpdateProfilePhrases = json.load(commonUpdateProfilePhrasesFile)["modify_info_phrases"]
 
-commonJokesRequestFile = open('commonJokesRequest.json', 'r')
+commonJokesRequestFile = open(absJsonFilesPath + 'commonJokesRequest.json', 'r')
 commonJokesRequestPhrases = json.load(commonJokesRequestFile)["joke_request_phrases"]
 
-commonNeedMoreRequestFile = open('commonNeedMoreRequest.json', 'r')
+commonNeedMoreRequestFile = open(absJsonFilesPath + 'commonNeedMoreRequest.json', 'r')
 commonNeedMoreRequestPhrases = json.load(commonNeedMoreRequestFile)["need_more_phrases"]
 
 # Inizializza il motore TTS con la lingua inglese
-engine = pyttsx3.init(driverName='sapi5')
+engine = pyttsx3.init(driverName='espeak')
 voices = engine.getProperty('voices')
 engine.setProperty('voice', voices[2].id)  # Seleziona una voce in inglese
 
